@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Impact {
+  id              String   @id @default(uuid())
+  title           String
+  description     String
+  jobFamily       String   @default("TPM") // TPM, PgM, PjM, BizOps
+  impactCategory  String
+  pillars         String   // JSON array stored as string for SQLite (craft skills)
+  quantifiedValue Float?
+  quantifiedUnit  String?
+  date            DateTime
+  programTags     String   // JSON array stored as string for SQLite
+  stakeholders    String   // JSON array stored as string for SQLite
+  evidenceLinks   String   // JSON array stored as string for SQLite
+  source          String   @default("web")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
