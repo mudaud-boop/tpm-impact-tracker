@@ -14,7 +14,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
 
   const cards = [
     {
-      label: 'Total Impacts',
+      label: 'Total Assessments',
       value: stats.totalImpacts,
       icon: Target,
       color: 'text-primary-500',
@@ -29,7 +29,7 @@ export function StatsCards({ stats }: StatsCardsProps) {
       bgColor: 'bg-purple-50'
     },
     {
-      label: 'Pillars Covered',
+      label: 'Craft Skills Covered',
       value: Object.values(stats.byPillar).filter(v => v > 0).length,
       subtext: topPillar ? `Top: ${topPillar[0].split(' ').slice(0, 2).join(' ')}` : undefined,
       icon: CheckCircle,

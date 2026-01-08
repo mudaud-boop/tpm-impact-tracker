@@ -15,7 +15,7 @@ export function ImpactCard({ impact, onDelete }: ImpactCardProps) {
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
-    if (!confirm('Are you sure you want to delete this impact?')) return;
+    if (!confirm('Are you sure you want to delete this assessment?')) return;
 
     setDeleting(true);
     try {
@@ -23,7 +23,7 @@ export function ImpactCard({ impact, onDelete }: ImpactCardProps) {
       onDelete();
     } catch (error) {
       console.error('Failed to delete:', error);
-      alert('Failed to delete impact');
+      alert('Failed to delete assessment');
     } finally {
       setDeleting(false);
     }

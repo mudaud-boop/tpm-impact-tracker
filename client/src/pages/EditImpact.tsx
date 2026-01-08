@@ -1,9 +1,81 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Sparkles, Save, ArrowLeft, Plus, X } from 'lucide-react';
+import { Sparkles, Save, ArrowLeft, Plus, X, Info } from 'lucide-react';
 import { getImpact, updateImpact, classifyImpact } from '@/lib/api';
 import { IMPACT_CATEGORIES, JOB_FAMILIES, getCraftSkillsForJobFamily, type JobFamily, type ImpactCategory, type CraftSkillName } from '@/types';
-import { PILLAR_COLORS, CATEGORY_COLORS, JOB_FAMILY_COLORS, cn } from '@/lib/utils';
+import { CATEGORY_COLORS, JOB_FAMILY_COLORS, cn } from '@/lib/utils';
+import { getRubricExpectations, type Level } from '@/lib/rubricExpectations';
+
+const LEVELS = [
+  'Manager',
+  'Senior',
+  'Staff',
+  'Sr. Staff',
+  'Principal',
+  'Director',
+  'VP'
+];
+
+const PERFORMANCE_SCORES = [
+  { value: '0', label: '0 - Not Demonstrated' },
+  { value: '1', label: '1 - Insufficient Level/Scope' },
+  { value: '2', label: '2 - Lacks Consistency' },
+  { value: '3', label: '3 - Mostly Demonstrated' },
+  { value: '4', label: '4 - Fully Demonstrated' },
+  { value: '5', label: '5 - Demonstrated Above Expectations' }
+];
+
+const METRIC_CATEGORIES = {
+  'Delivery & Execution': [
+    'Programs/launches delivered on time',
+    'Milestones hit',
+    'Milestones missed',
+    'Cycle time reduction (days)',
+    'Scope changes managed without timeline slip'
+  ],
+  'Risk Management': [
+    'Risks identified before becoming issues',
+    'Escalations that prevented delays',
+    'Incidents avoided through proactive action',
+    '$ saved from early intervention',
+    'Days saved from early intervention'
+  ],
+  'Decision Velocity': [
+    'Time to decision (days reduced)',
+    'Stakeholders aligned per decision',
+    'Decisions unblocked',
+    'Tradeoff discussions facilitated'
+  ],
+  'Unblocking & Dependencies': [
+    'Cross-team blockers resolved',
+    'Dependencies cleared ahead of schedule',
+    'Teams unblocked',
+    'Handoff delays eliminated'
+  ],
+  'Time & Efficiency Savings': [
+    'Meeting hours reduced',
+    'Processes automated or streamlined',
+    'Hours saved across teams',
+    'Redundant work identified and cut'
+  ],
+  'Scale & Leverage': [
+    'Frameworks/templates created and adopted',
+    'Teams using your playbooks',
+    'Onboarding time reduced (hours)',
+    'Best practices scaled across org'
+  ],
+  'Change Leadership': [
+    'Change initiatives led',
+    'Adoption rate (%)',
+    'Stakeholder sentiment improvement',
+    'Training/enablement sessions delivered'
+  ],
+  'Technical Contribution': [
+    'Architecture decisions influenced',
+    'Tech debt conversations facilitated',
+    'Engineering velocity improvements'
+  ]
+};
 
 export function EditImpact() {
   const navigate = useNavigate();
@@ -16,10 +88,13 @@ export function EditImpact() {
     title: '',
     description: '',
     jobFamily: 'TPM' as JobFamily,
+    level: '' as Level | '',
+    selectedExpectation: '',
     impactCategory: '',
     pillars: [] as string[],
-    quantifiedValue: '',
-    quantifiedUnit: '',
+    metrics: [{ value: '', unit: '' }] as { value: string; unit: string }[],
+    selfAssessmentScore: '',
+    managerAssessmentScore: '',
     date: '',
     programTags: [] as string[],
     stakeholders: [] as string[],
@@ -33,6 +108,11 @@ export function EditImpact() {
   // Get craft skills for selected job family
   const craftSkills = getCraftSkillsForJobFamily(form.jobFamily);
 
+  // Get rubric expectations based on job family, craft skill, and level
+  const rubricExpectations = form.pillars[0] && form.level
+    ? getRubricExpectations(form.jobFamily, form.pillars[0], form.level as Level)
+    : [];
+
   useEffect(() => {
     if (id) {
       loadImpact(id);
@@ -42,22 +122,76 @@ export function EditImpact() {
   async function loadImpact(impactId: string) {
     try {
       const impact = await getImpact(impactId);
+
+      // Parse metrics from stored format
+      let metrics: { value: string; unit: string }[] = [{ value: '', unit: '' }];
+      if (impact.quantifiedUnit && impact.quantifiedValue) {
+        // Check if unit contains multiple metrics (e.g., "5 programs; 10 days")
+        if (impact.quantifiedUnit.includes(';')) {
+          const parts = impact.quantifiedUnit.split('; ');
+          metrics = parts.map(part => {
+            const match = part.match(/^(\d+(?:\.\d+)?)\s+(.+)$/);
+            if (match) {
+              return { value: match[1], unit: match[2] };
+            }
+            return { value: '', unit: part };
+          });
+        } else {
+          // Single metric - value is separate, unit is just the unit name
+          metrics = [{ value: impact.quantifiedValue.toString(), unit: impact.quantifiedUnit }];
+        }
+      } else if (impact.quantifiedValue) {
+        metrics = [{ value: impact.quantifiedValue.toString(), unit: '' }];
+      }
+
+      // Load level from impact or try to find it by matching the title
+      let loadedLevel = (impact.level as Level) || '';
+      let selectedExpectation = '';
+
+      // If we have a pillar, try to find the matching expectation and level
+      if (impact.pillars[0]) {
+        const jobFamily = (impact.jobFamily as JobFamily) || 'TPM';
+
+        // If level is already set, just find the expectation
+        if (loadedLevel) {
+          const expectations = getRubricExpectations(jobFamily, impact.pillars[0], loadedLevel as Level);
+          const matchingExp = expectations.find(exp => exp.text === impact.title);
+          if (matchingExp) {
+            selectedExpectation = matchingExp.id;
+          }
+        } else {
+          // Search through all levels to find matching expectation
+          for (const lvl of LEVELS) {
+            const expectations = getRubricExpectations(jobFamily, impact.pillars[0], lvl as Level);
+            const matchingExp = expectations.find(exp => exp.text === impact.title);
+            if (matchingExp) {
+              loadedLevel = lvl as Level;
+              selectedExpectation = matchingExp.id;
+              break;
+            }
+          }
+        }
+      }
+
       setForm({
         title: impact.title,
         description: impact.description,
         jobFamily: (impact.jobFamily as JobFamily) || 'TPM',
+        level: loadedLevel,
+        selectedExpectation,
         impactCategory: impact.impactCategory,
         pillars: impact.pillars,
-        quantifiedValue: impact.quantifiedValue?.toString() || '',
-        quantifiedUnit: impact.quantifiedUnit || '',
+        metrics,
+        selfAssessmentScore: impact.selfAssessmentScore || '',
+        managerAssessmentScore: impact.managerAssessmentScore || '',
         date: impact.date.split('T')[0],
-        programTags: impact.programTags,
-        stakeholders: impact.stakeholders,
-        evidenceLinks: impact.evidenceLinks
+        programTags: impact.programTags || [],
+        stakeholders: impact.stakeholders || [],
+        evidenceLinks: impact.evidenceLinks || []
       });
     } catch (error) {
-      console.error('Failed to load impact:', error);
-      alert('Failed to load impact');
+      console.error('Failed to load assessment:', error);
+      alert('Failed to load assessment');
       navigate('/');
     } finally {
       setLoading(false);
@@ -79,7 +213,9 @@ export function EditImpact() {
         ...prev,
         pillars: validPillars,
         impactCategory: result.category,
-        quantifiedUnit: result.suggestedMetrics[0] || prev.quantifiedUnit
+        metrics: result.suggestedMetrics[0]
+          ? [{ value: '', unit: result.suggestedMetrics[0] }]
+          : prev.metrics
       }));
     } catch (error) {
       console.error('Classification failed:', error);
@@ -92,12 +228,20 @@ export function EditImpact() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    if (!form.title || !form.description || !form.impactCategory || form.pillars.length === 0) {
+    if (!form.selectedExpectation || !form.description || form.pillars.length === 0 || !form.level) {
       alert('Please fill in all required fields');
       return;
     }
 
     if (!id) return;
+
+    // Format metrics for storage
+    const validMetrics = form.metrics.filter(m => m.value && m.unit);
+    const firstMetric = validMetrics[0];
+    // Store just the unit names, not the values (values are summed separately)
+    const metricsString = validMetrics.length > 1
+      ? validMetrics.map(m => `${m.value} ${m.unit}`).join('; ')
+      : firstMetric?.unit || undefined;
 
     setSaving(true);
     try {
@@ -105,34 +249,48 @@ export function EditImpact() {
         ...form,
         impactCategory: form.impactCategory as ImpactCategory,
         pillars: form.pillars as CraftSkillName[],
-        quantifiedValue: form.quantifiedValue ? parseFloat(form.quantifiedValue) : undefined,
-        quantifiedUnit: form.quantifiedUnit || undefined,
+        quantifiedValue: firstMetric ? parseFloat(firstMetric.value) : undefined,
+        quantifiedUnit: metricsString || undefined,
         date: form.date
       });
       navigate('/');
     } catch (error) {
-      console.error('Failed to update impact:', error);
-      alert('Failed to update impact');
+      console.error('Failed to update assessment:', error);
+      alert('Failed to update assessment');
     } finally {
       setSaving(false);
     }
   }
 
   function handleJobFamilyChange(jobFamily: JobFamily) {
-    // Clear pillars when changing job family since skills may differ
+    // Clear pillars and selectedExpectation when changing job family since skills may differ
     setForm(prev => ({
       ...prev,
       jobFamily,
-      pillars: []
+      pillars: [],
+      selectedExpectation: '',
+      title: ''
     }));
   }
 
-  function togglePillar(pillar: string) {
+  function addMetric() {
     setForm(prev => ({
       ...prev,
-      pillars: prev.pillars.includes(pillar)
-        ? prev.pillars.filter(p => p !== pillar)
-        : [...prev.pillars, pillar]
+      metrics: [...prev.metrics, { value: '', unit: '' }]
+    }));
+  }
+
+  function updateMetric(index: number, field: 'value' | 'unit', value: string) {
+    setForm(prev => ({
+      ...prev,
+      metrics: prev.metrics.map((m, i) => i === index ? { ...m, [field]: value } : m)
+    }));
+  }
+
+  function removeMetric(index: number) {
+    setForm(prev => ({
+      ...prev,
+      metrics: prev.metrics.filter((_, i) => i !== index)
     }));
   }
 
@@ -150,8 +308,6 @@ export function EditImpact() {
       [field]: prev[field].filter((_, i) => i !== index)
     }));
   }
-
-  const selectedJobFamilyLabel = JOB_FAMILIES.find(jf => jf.value === form.jobFamily)?.label || form.jobFamily;
 
   if (loading) {
     return (
@@ -171,7 +327,7 @@ export function EditImpact() {
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Edit Impact</h1>
+          <h1 className="text-2xl font-semibold text-gray-900">Edit Assessment</h1>
           <p className="text-gray-500 mt-1">Update your contribution</p>
         </div>
       </div>
@@ -208,25 +364,104 @@ export function EditImpact() {
           </div>
         </div>
 
-        {/* Title */}
+        {/* Craft Skill Selection */}
         <div className="card p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Title <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Craft Skill <span className="text-red-500">*</span>
           </label>
-          <input
-            type="text"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
+          <select
+            value={form.pillars[0] || ''}
+            onChange={(e) => setForm({
+              ...form,
+              pillars: e.target.value ? [e.target.value] : [],
+              selectedExpectation: '',
+              title: ''
+            })}
             className="input"
-            placeholder="Brief title for your impact"
-          />
+          >
+            <option value="">Select a craft skill...</option>
+            {craftSkills.map(skill => (
+              <option key={skill} value={skill}>{skill}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Description with AI */}
+        {/* Level Selection */}
+        <div className="card p-6">
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Level <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={form.level}
+            onChange={(e) => setForm({ ...form, level: e.target.value as Level | '', selectedExpectation: '' })}
+            className="input"
+          >
+            <option value="">Select your level...</option>
+            {LEVELS.map(level => (
+              <option key={level} value={level}>{level}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Rubric Expectation Selection */}
+        <div className="card p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Rubric Expectation <span className="text-red-500">*</span>
+            </label>
+            <div className="relative group">
+              <Info className="h-4 w-4 text-gray-400 cursor-help" />
+              <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 hidden group-hover:block w-64 p-2 bg-gray-900 text-white text-xs rounded-lg shadow-lg z-10">
+                <div className="text-center">
+                  Create a new assessment for each rubric expectation at mid-year and again at end-of-year to track your progress.
+                </div>
+                <div className="absolute left-1/2 -translate-x-1/2 top-full -mt-1 border-4 border-transparent border-t-gray-900"></div>
+              </div>
+            </div>
+          </div>
+          {!form.pillars[0] || !form.level ? (
+            <p className="text-sm text-gray-500 italic">
+              Select a Craft Skill and Level first to see expectations
+            </p>
+          ) : rubricExpectations.length === 0 ? (
+            <p className="text-sm text-gray-500 italic">
+              No expectations found for this combination
+            </p>
+          ) : (
+            <select
+              value={form.selectedExpectation}
+              onChange={(e) => {
+                const selected = rubricExpectations.find(exp => exp.id === e.target.value);
+                setForm({
+                  ...form,
+                  selectedExpectation: e.target.value,
+                  title: selected ? selected.text : ''
+                });
+              }}
+              className="input"
+            >
+              <option value="">Select an expectation...</option>
+              {rubricExpectations.map((exp, index) => (
+                <option key={exp.id} value={exp.id}>
+                  {index + 1}. {exp.text.length > 100 ? exp.text.substring(0, 100) + '...' : exp.text}
+                </option>
+              ))}
+            </select>
+          )}
+          {form.selectedExpectation && (
+            <div className="mt-3 p-3 bg-primary-50 rounded-lg border border-primary-200">
+              <p className="text-sm text-gray-700">
+                {rubricExpectations.find(exp => exp.id === form.selectedExpectation)?.text}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Relevant Examples / Evidence */}
         <div className="card p-6">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700">
-              Description <span className="text-red-500">*</span>
+              Evidence / Supporting Details <span className="text-red-500">*</span>
             </label>
             <button
               type="button"
@@ -242,14 +477,102 @@ export function EditImpact() {
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
             className="input min-h-[120px]"
-            placeholder="Describe your impact in detail. The AI will help classify it to craft skill pillars."
+            placeholder="Provide relevant examples, evidence, and supporting details for this assessment."
           />
+        </div>
+
+        {/* Quantified Metrics */}
+        <div className="card p-6">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Quantified Metrics (optional)
+            </label>
+            <button
+              type="button"
+              onClick={addMetric}
+              className="btn btn-secondary text-sm py-1.5 flex items-center gap-1"
+            >
+              <Plus className="h-4 w-4" />
+              Add Metric
+            </button>
+          </div>
+          <div className="space-y-3">
+            {form.metrics.map((metric, index) => (
+              <div key={index} className="flex gap-3 items-start">
+                <input
+                  type="number"
+                  value={metric.value}
+                  onChange={(e) => updateMetric(index, 'value', e.target.value)}
+                  className="input w-28"
+                  placeholder="Value"
+                />
+                <select
+                  value={metric.unit}
+                  onChange={(e) => updateMetric(index, 'unit', e.target.value)}
+                  className="input flex-1"
+                >
+                  <option value="">Select a metric...</option>
+                  {Object.entries(METRIC_CATEGORIES).map(([category, metrics]) => (
+                    <optgroup key={category} label={category}>
+                      {metrics.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {form.metrics.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeMetric(index)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Performance Scores */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Self Assessment
+            </label>
+            <select
+              value={form.selfAssessmentScore}
+              onChange={(e) => setForm({ ...form, selfAssessmentScore: e.target.value })}
+              className="input"
+            >
+              <option value="">Select a score...</option>
+              {PERFORMANCE_SCORES.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="card p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Manager Assessment
+            </label>
+            <select
+              value={form.managerAssessmentScore}
+              onChange={(e) => setForm({ ...form, managerAssessmentScore: e.target.value })}
+              className="input"
+            >
+              <option value="">Select a score...</option>
+              {PERFORMANCE_SCORES.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         {/* Category */}
         <div className="card p-6">
           <label className="block text-sm font-medium text-gray-700 mb-3">
-            Impact Category <span className="text-red-500">*</span>
+            Impact Category (optional)
           </label>
           <div className="flex flex-wrap gap-2">
             {IMPACT_CATEGORIES.map(category => (
@@ -275,199 +598,155 @@ export function EditImpact() {
           </div>
         </div>
 
-        {/* Craft Skills (Pillars) */}
-        <div className="card p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            {selectedJobFamilyLabel} Craft Skills <span className="text-red-500">*</span>
-          </label>
-          <div className="space-y-2">
-            {craftSkills.map(pillar => (
+        {/* Row: Date + Program Tags */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Date
+            </label>
+            <input
+              type="date"
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              className="input"
+            />
+          </div>
+
+          <div className="card p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Program Tags
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag(tagInput, 'programTags');
+                    setTagInput('');
+                  }
+                }}
+                className="input flex-1 text-sm"
+                placeholder="Add tag + Enter"
+              />
               <button
-                key={pillar}
                 type="button"
-                onClick={() => togglePillar(pillar)}
-                className={cn(
-                  'w-full text-left px-4 py-3 rounded-lg text-sm transition-colors border',
-                  form.pillars.includes(pillar)
-                    ? 'border-transparent'
-                    : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
-                )}
-                style={form.pillars.includes(pillar) ? {
-                  backgroundColor: `${PILLAR_COLORS[pillar]}15`,
-                  color: PILLAR_COLORS[pillar],
-                  borderColor: `${PILLAR_COLORS[pillar]}30`
-                } : {}}
-              >
-                {pillar}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Quantified Metrics */}
-        <div className="card p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Quantified Metric (optional)
-          </label>
-          <div className="flex gap-4">
-            <input
-              type="number"
-              value={form.quantifiedValue}
-              onChange={(e) => setForm({ ...form, quantifiedValue: e.target.value })}
-              className="input w-32"
-              placeholder="Value"
-            />
-            <input
-              type="text"
-              value={form.quantifiedUnit}
-              onChange={(e) => setForm({ ...form, quantifiedUnit: e.target.value })}
-              className="input flex-1"
-              placeholder="Unit (e.g., hours saved, risks mitigated, teams unblocked)"
-            />
-          </div>
-        </div>
-
-        {/* Date */}
-        <div className="card p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Date
-          </label>
-          <input
-            type="date"
-            value={form.date}
-            onChange={(e) => setForm({ ...form, date: e.target.value })}
-            className="input w-48"
-          />
-        </div>
-
-        {/* Tags */}
-        <div className="card p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Program Tags
-          </label>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
+                onClick={() => {
                   addTag(tagInput, 'programTags');
                   setTagInput('');
-                }
-              }}
-              className="input flex-1"
-              placeholder="Add a tag and press Enter"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                addTag(tagInput, 'programTags');
-                setTagInput('');
-              }}
-              className="btn btn-secondary"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {form.programTags.map((tag, i) => (
-              <span key={i} className="badge flex items-center gap-1">
-                {tag}
-                <button type="button" onClick={() => removeTag(i, 'programTags')}>
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
+                }}
+                className="btn btn-secondary p-2"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            {form.programTags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {form.programTags.map((tag, i) => (
+                  <span key={i} className="badge text-xs flex items-center gap-1">
+                    {tag}
+                    <button type="button" onClick={() => removeTag(i, 'programTags')}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Stakeholders */}
-        <div className="card p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Stakeholders
-          </label>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="text"
-              value={stakeholderInput}
-              onChange={(e) => setStakeholderInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
+        {/* Row: Stakeholders + Evidence Links */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="card p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Stakeholders
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={stakeholderInput}
+                onChange={(e) => setStakeholderInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag(stakeholderInput, 'stakeholders');
+                    setStakeholderInput('');
+                  }
+                }}
+                className="input flex-1 text-sm"
+                placeholder="Add stakeholder + Enter"
+              />
+              <button
+                type="button"
+                onClick={() => {
                   addTag(stakeholderInput, 'stakeholders');
                   setStakeholderInput('');
-                }
-              }}
-              className="input flex-1"
-              placeholder="Add a stakeholder and press Enter"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                addTag(stakeholderInput, 'stakeholders');
-                setStakeholderInput('');
-              }}
-              className="btn btn-secondary"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
+                }}
+                className="btn btn-secondary p-2"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            {form.stakeholders.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {form.stakeholders.map((s, i) => (
+                  <span key={i} className="badge text-xs flex items-center gap-1">
+                    {s}
+                    <button type="button" onClick={() => removeTag(i, 'stakeholders')}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {form.stakeholders.map((s, i) => (
-              <span key={i} className="badge flex items-center gap-1">
-                {s}
-                <button type="button" onClick={() => removeTag(i, 'stakeholders')}>
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
 
-        {/* Evidence Links */}
-        <div className="card p-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Evidence Links
-          </label>
-          <div className="flex gap-2 mb-2">
-            <input
-              type="url"
-              value={linkInput}
-              onChange={(e) => setLinkInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
+          <div className="card p-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Evidence Links
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="url"
+                value={linkInput}
+                onChange={(e) => setLinkInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addTag(linkInput, 'evidenceLinks');
+                    setLinkInput('');
+                  }
+                }}
+                className="input flex-1 text-sm"
+                placeholder="Add URL + Enter"
+              />
+              <button
+                type="button"
+                onClick={() => {
                   addTag(linkInput, 'evidenceLinks');
                   setLinkInput('');
-                }
-              }}
-              className="input flex-1"
-              placeholder="Add a URL and press Enter"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                addTag(linkInput, 'evidenceLinks');
-                setLinkInput('');
-              }}
-              className="btn btn-secondary"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {form.evidenceLinks.map((link, i) => (
-              <span key={i} className="badge flex items-center gap-1">
-                <a href={link} target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:underline">
-                  Link {i + 1}
-                </a>
-                <button type="button" onClick={() => removeTag(i, 'evidenceLinks')}>
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
+                }}
+                className="btn btn-secondary p-2"
+              >
+                <Plus className="h-4 w-4" />
+              </button>
+            </div>
+            {form.evidenceLinks.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {form.evidenceLinks.map((link, i) => (
+                  <span key={i} className="badge text-xs flex items-center gap-1">
+                    <a href={link} target="_blank" rel="noopener noreferrer" className="text-primary-500 hover:underline">
+                      Link {i + 1}
+                    </a>
+                    <button type="button" onClick={() => removeTag(i, 'evidenceLinks')}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -486,7 +765,7 @@ export function EditImpact() {
             className="btn btn-primary flex items-center gap-2"
           >
             <Save className="h-4 w-4" />
-            {saving ? 'Saving...' : 'Update Impact'}
+            {saving ? 'Saving...' : 'Update Assessment'}
           </button>
         </div>
       </form>

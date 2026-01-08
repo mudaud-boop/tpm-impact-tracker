@@ -94,18 +94,21 @@ export function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-          <p className="text-gray-500 mt-1">Track and quantify your TPM, PgM, PjM, or BizOps impact</p>
-        </div>
-        <Link
-          to="/new"
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <Plus className="h-4 w-4" />
-          New Impact
-        </Link>
+      <div>
+        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+        <p className="text-gray-500 mt-1">
+          Track and quantify your assessments
+          <span className="mx-2">·</span>
+          <span className="text-primary-600 font-medium">
+            {(() => {
+              const month = new Date().getMonth(); // 0-indexed (0 = Jan, 7 = Aug)
+              // Aug (7) through Jan (0) = Mid-Year, Feb (1) through Jul (6) = End-Year
+              return month >= 7 || month <= 0
+                ? 'Preparing for Mid-Year Reviews'
+                : 'Preparing for End-Year Reviews';
+            })()}
+          </span>
+        </p>
       </div>
 
       {/* Filters */}
@@ -141,6 +144,7 @@ export function Dashboard() {
             ))}
           </div>
         </div>
+
       </div>
 
       {/* Stats Cards */}
@@ -172,7 +176,7 @@ export function Dashboard() {
                 ))
               ) : (
                 <p className="text-gray-500 text-center py-8">
-                  No quantified impacts yet. Add metrics to your impacts!
+                  No quantified assessments yet. Add metrics to your assessments!
                 </p>
               )}
             </div>
@@ -184,10 +188,10 @@ export function Dashboard() {
       <div>
         <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
           <Calendar className="h-5 w-5 text-primary-500" />
-          Recent Impacts
+          Recent Assessments
           {jobFamilyFilter !== 'all' && (
             <span className="text-sm font-normal text-gray-500">
-              ({filteredImpacts.length} {jobFamilyFilter} impact{filteredImpacts.length !== 1 ? 's' : ''})
+              ({filteredImpacts.length} {jobFamilyFilter} assessment{filteredImpacts.length !== 1 ? 's' : ''})
             </span>
           )}
         </h3>
@@ -198,16 +202,16 @@ export function Dashboard() {
           <div className="card p-12 text-center">
             <Target className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {jobFamilyFilter === 'all' ? 'No impacts yet' : `No ${jobFamilyFilter} impacts`}
+              {jobFamilyFilter === 'all' ? 'No assessments yet' : `No ${jobFamilyFilter} assessments`}
             </h3>
             <p className="text-gray-500 mb-4">
               {jobFamilyFilter === 'all'
                 ? 'Start capturing your contributions'
-                : `No impacts found for ${jobFamilyFilter}. Try a different filter or add a new impact.`}
+                : `No assessments found for ${jobFamilyFilter}. Try a different filter or add a new assessment.`}
             </p>
             <Link to="/new" className="btn btn-primary inline-flex items-center gap-2">
               <Plus className="h-4 w-4" />
-              Add Your First Impact
+              Add Your First Assessment
             </Link>
           </div>
         ) : (
@@ -231,6 +235,7 @@ export function Dashboard() {
           View on GitHub
         </a>
       </div>
+
     </div>
   );
 }

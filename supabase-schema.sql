@@ -70,3 +70,47 @@ CREATE TRIGGER update_impacts_updated_at
   BEFORE UPDATE ON impacts
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
+
+-- =============================================
+-- STORAGE: Avatar Bucket
+-- =============================================
+-- Note: Create the 'avatars' bucket manually in Supabase Dashboard:
+-- 1. Go to Storage in your Supabase dashboard
+-- 2. Click "New bucket"
+-- 3. Name it "avatars"
+-- 4. Check "Public bucket" to allow public access to avatars
+-- 5. Click "Create bucket"
+
+-- Storage policies for avatars bucket (run after creating bucket)
+-- Allow users to upload their own avatar
+CREATE POLICY "Users can upload own avatar"
+  ON storage.objects
+  FOR INSERT
+  WITH CHECK (
+    bucket_id = 'avatars' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Allow users to update their own avatar
+CREATE POLICY "Users can update own avatar"
+  ON storage.objects
+  FOR UPDATE
+  USING (
+    bucket_id = 'avatars' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Allow users to delete their own avatar
+CREATE POLICY "Users can delete own avatar"
+  ON storage.objects
+  FOR DELETE
+  USING (
+    bucket_id = 'avatars' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+-- Allow public read access to avatars
+CREATE POLICY "Public avatar access"
+  ON storage.objects
+  FOR SELECT
+  USING (bucket_id = 'avatars');

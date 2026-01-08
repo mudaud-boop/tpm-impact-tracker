@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { FileText, Copy, Check, Calendar, Target, TrendingUp, Download } from 'lucide-react';
 import { jsPDF } from 'jspdf';
-import { getSummary } from '@/lib/api';
+import autoTable from 'jspdf-autotable';
+import { getSummary, getImpacts } from '@/lib/api';
 import { cn, PILLAR_COLORS } from '@/lib/utils';
-import type { SummaryResponse } from '@/types';
+import type { SummaryResponse, Impact } from '@/types';
 
 type PresetKey = 'q1' | 'q2' | 'q3' | 'q4' | 'h1' | 'h2' | 'fy' | 'custom';
 
@@ -132,9 +133,9 @@ export function Summary() {
   }
 
   function generatePlainText(data: SummaryResponse): string {
-    let text = `TPM Impact Summary\n`;
+    let text = `TPM Assessment Summary\n`;
     text += `Period: ${data.period.start} to ${data.period.end}\n`;
-    text += `Total Impacts: ${data.totalImpacts}\n\n`;
+    text += `Total Assessments: ${data.totalImpacts}\n\n`;
 
     text += `=== BY PILLAR ===\n\n`;
     Object.entries(data.byPillar).forEach(([pillar, impacts]) => {
@@ -179,107 +180,165 @@ export function Summary() {
         ? PRESETS.h1.getRange()
         : PRESETS.fy.getRange();
 
-      // Fetch the summary data for the period
+      // Fetch full impact data for the period
+      const impacts = await getImpacts({ startDate: range.start, endDate: range.end });
       const data = await getSummary(range.start, range.end);
 
-      // Create PDF
-      const doc = new jsPDF();
+      // Create PDF in landscape for more table width
+      const doc = new jsPDF({ orientation: 'landscape' });
       const pageWidth = doc.internal.pageSize.getWidth();
-      const margin = 20;
-      const contentWidth = pageWidth - (margin * 2);
+      const margin = 15;
       let y = margin;
 
-      // Helper function to add text and handle page breaks
+      // Helper function to add text
       const addText = (text: string, fontSize: number, isBold: boolean = false, color: [number, number, number] = [0, 0, 0]) => {
         doc.setFontSize(fontSize);
         doc.setFont('helvetica', isBold ? 'bold' : 'normal');
         doc.setTextColor(color[0], color[1], color[2]);
-
-        const lines = doc.splitTextToSize(text, contentWidth);
-        const lineHeight = fontSize * 0.5;
-
-        lines.forEach((line: string) => {
-          if (y > 270) {
-            doc.addPage();
-            y = margin;
-          }
-          doc.text(line, margin, y);
-          y += lineHeight;
-        });
+        doc.text(text, margin, y);
+        y += fontSize * 0.5;
       };
 
       const addSpace = (space: number) => {
         y += space;
-        if (y > 270) {
-          doc.addPage();
-          y = margin;
-        }
       };
 
       // Title
+      const periodLabel = type === 'midyear' ? `MY'${currentFY.toString().slice(-2)}` : `FY${currentFY.toString().slice(-2)}`;
       const title = type === 'midyear'
-        ? `Mid-Year Impact Summary - H1 FY${currentFY.toString().slice(-2)}`
-        : `End-Year Impact Summary - FY${currentFY.toString().slice(-2)}`;
+        ? `Mid-Year Assessment Summary - H1 FY${currentFY.toString().slice(-2)}`
+        : `End-Year Assessment Summary - FY${currentFY.toString().slice(-2)}`;
 
-      addText(title, 20, true, [35, 108, 255]); // Intuit Super Blue
+      addText(title, 18, true, [35, 108, 255]);
+      addSpace(6);
+      addText(`Period: ${range.start} to ${range.end}  |  Generated: ${new Date().toLocaleDateString()}`, 10, false, [100, 100, 100]);
+      addSpace(10);
+
+      // Summary Overview
+      addText('SUMMARY OVERVIEW', 12, true);
+      addSpace(5);
+      addText(`Total Assessments: ${impacts.length}  |  Craft Skills Covered: ${Object.values(data.byPillar).filter(arr => arr.length > 0).length}  |  Quantified Metrics: ${Object.keys(data.quantifiedTotals).length}`, 10);
       addSpace(8);
 
-      // Period
-      addText(`Period: ${data.period.start} to ${data.period.end}`, 11, false, [100, 100, 100]);
-      addSpace(4);
-      addText(`Generated: ${new Date().toLocaleDateString()}`, 11, false, [100, 100, 100]);
-      addSpace(12);
-
-      // Overview Stats
-      addText('SUMMARY OVERVIEW', 14, true);
-      addSpace(6);
-      addText(`Total Impacts: ${data.totalImpacts}`, 12);
-      addText(`Craft Skills Covered: ${Object.values(data.byPillar).filter(arr => arr.length > 0).length}`, 12);
-      addText(`Quantified Metrics: ${Object.keys(data.quantifiedTotals).length}`, 12);
-      addSpace(12);
-
-      // Quantified Totals (if any)
+      // Quantified Totals
       if (Object.keys(data.quantifiedTotals).length > 0) {
-        addText('QUANTIFIED TOTALS', 14, true);
-        addSpace(6);
-        Object.entries(data.quantifiedTotals).forEach(([unit, total]) => {
-          addText(`• ${unit}: ${total}`, 11);
-        });
-        addSpace(12);
+        addText('QUANTIFIED TOTALS', 12, true);
+        addSpace(5);
+        const totalsText = Object.entries(data.quantifiedTotals).map(([unit, total]) => `${unit}: ${total}`).join('  |  ');
+        addText(totalsText, 10);
+        addSpace(10);
       }
 
-      // Impacts by Pillar
-      addText('IMPACTS BY CRAFT SKILL', 14, true);
+      // Group impacts by pillar
+      const impactsByPillar: Record<string, Impact[]> = {};
+      impacts.forEach((impact: Impact) => {
+        impact.pillars.forEach(pillar => {
+          if (!impactsByPillar[pillar]) {
+            impactsByPillar[pillar] = [];
+          }
+          impactsByPillar[pillar].push(impact);
+        });
+      });
+
+      // Assessments by Craft Skill - Table Format
+      addText('ASSESSMENTS BY CRAFT SKILL', 12, true);
       addSpace(8);
 
-      Object.entries(data.byPillar).forEach(([pillar, impacts]) => {
-        if (impacts.length > 0) {
-          addSpace(4);
-          addText(`${pillar} (${impacts.length})`, 12, true, [35, 108, 255]);
-          addSpace(4);
+      // Score label helper
+      const getScoreLabel = (score: string | undefined) => {
+        const labels: Record<string, string> = {
+          '0': '0 - Not Demonstrated',
+          '1': '1 - Insufficient',
+          '2': '2 - Lacks Consistency',
+          '3': '3 - Mostly Demonstrated',
+          '4': '4 - Fully Demonstrated',
+          '5': '5 - Above Expectations'
+        };
+        return score ? labels[score] || score : '-';
+      };
 
-          impacts.forEach(impact => {
-            let impactText = `• ${impact.title}`;
-            if (impact.quantifiedValue && impact.quantifiedUnit) {
-              impactText += ` [${impact.quantifiedValue} ${impact.quantifiedUnit}]`;
+      // Create tables for each craft skill
+      Object.entries(impactsByPillar).forEach(([pillar, pillarImpacts]) => {
+        if (pillarImpacts.length > 0) {
+          // Check if we need a new page
+          if (y > 170) {
+            doc.addPage();
+            y = margin;
+          }
+
+          // Pillar header
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+          doc.setTextColor(35, 108, 255);
+          doc.text(`${pillar}`, margin, y);
+          y += 6;
+
+          // Table data
+          const tableData = pillarImpacts.map((impact: Impact) => [
+            impact.title,
+            getScoreLabel(impact.selfAssessmentScore),
+            getScoreLabel(impact.managerAssessmentScore),
+            impact.description
+          ]);
+
+          // Create table
+          autoTable(doc, {
+            startY: y,
+            head: [[
+              'Rubric Expectation',
+              `${periodLabel} Self Assessment`,
+              `${periodLabel} Manager Assessment`,
+              'Relevant Examples / Details'
+            ]],
+            body: tableData,
+            theme: 'grid',
+            headStyles: {
+              fillColor: [245, 247, 250],
+              textColor: [50, 50, 50],
+              fontStyle: 'bold',
+              fontSize: 8,
+              cellPadding: 3
+            },
+            bodyStyles: {
+              fontSize: 8,
+              cellPadding: 3,
+              textColor: [30, 30, 30]
+            },
+            columnStyles: {
+              0: { cellWidth: 70 },
+              1: { cellWidth: 35, halign: 'center' },
+              2: { cellWidth: 35, halign: 'center' },
+              3: { cellWidth: 'auto' }
+            },
+            margin: { left: margin, right: margin },
+            didDrawPage: () => {
+              // Reset y position after page break
             }
-            addText(impactText, 10);
           });
-          addSpace(4);
+
+          // Update y position after table
+          y = (doc as any).lastAutoTable.finalY + 10;
         }
       });
 
-      // Footer
-      addSpace(10);
-      doc.setDrawColor(200, 200, 200);
-      doc.line(margin, y, pageWidth - margin, y);
-      addSpace(6);
-      addText('Generated by Impact Tracker', 9, false, [150, 150, 150]);
+      // Footer on last page
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150, 150, 150);
+        doc.text(
+          `Generated by Assessment Tracker  |  Page ${i} of ${pageCount}`,
+          pageWidth / 2,
+          doc.internal.pageSize.getHeight() - 10,
+          { align: 'center' }
+        );
+      }
 
       // Save the PDF
       const filename = type === 'midyear'
-        ? `Impact_Summary_H1_FY${currentFY.toString().slice(-2)}.pdf`
-        : `Impact_Summary_FY${currentFY.toString().slice(-2)}.pdf`;
+        ? `Assessment_Summary_H1_FY${currentFY.toString().slice(-2)}.pdf`
+        : `Assessment_Summary_FY${currentFY.toString().slice(-2)}.pdf`;
 
       doc.save(filename);
     } catch (error) {
@@ -294,7 +353,7 @@ export function Summary() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold text-gray-900">Impact Summary</h1>
+        <h1 className="text-2xl font-semibold text-gray-900">Assessment Summary</h1>
         <p className="text-gray-500 mt-1">Generate a summary of your contributions</p>
       </div>
 
@@ -386,13 +445,13 @@ export function Summary() {
             <div className="grid grid-cols-3 gap-4 mb-6">
               <div className="bg-gray-50 rounded-lg p-4 text-center">
                 <p className="text-3xl font-semibold text-gray-900">{summary.totalImpacts}</p>
-                <p className="text-sm text-gray-500">Total Impacts</p>
+                <p className="text-sm text-gray-500">Total Assessments</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-4 text-center">
                 <p className="text-3xl font-semibold text-gray-900">
                   {Object.values(summary.byPillar).filter(arr => arr.length > 0).length}
                 </p>
-                <p className="text-sm text-gray-500">Pillars Covered</p>
+                <p className="text-sm text-gray-500">Craft Skills Covered</p>
               </div>
               <div className="bg-gray-50 rounded-lg p-4 text-center">
                 <p className="text-3xl font-semibold text-gray-900">
@@ -409,7 +468,7 @@ export function Summary() {
 
           {/* By Pillar */}
           <div className="card p-6">
-            <h3 className="text-lg font-medium mb-4">Impact by Pillar</h3>
+            <h3 className="text-lg font-medium mb-4">Assessments by Pillar</h3>
             <div className="space-y-6">
               {Object.entries(summary.byPillar).map(([pillar, impacts]) => (
                 impacts.length > 0 && (
@@ -468,7 +527,7 @@ export function Summary() {
         <div className="card p-12 text-center">
           <FileText className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No summary generated</h3>
-          <p className="text-gray-500">Select a period and generate your impact summary</p>
+          <p className="text-gray-500">Select a period and generate your assessment summary</p>
         </div>
       )}
 

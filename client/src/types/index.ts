@@ -5,10 +5,13 @@ export interface Impact {
   title: string;
   description: string;
   jobFamily: JobFamily;
+  level?: string;
   impactCategory: ImpactCategory;
   pillars: CraftSkillName[];  // renamed from pillars but keeping for backward compat
   quantifiedValue: number | null;
   quantifiedUnit: string | null;
+  selfAssessmentScore?: string;
+  managerAssessmentScore?: string;
   date: string;
   programTags: string[];
   stakeholders: string[];

@@ -20,10 +20,13 @@ export interface DbImpact {
   title: string;
   description: string;
   job_family: string;
+  level?: string;
   impact_category: string;
   pillars: string[];
   quantified_value: number | null;
   quantified_unit: string | null;
+  self_assessment_score?: string;
+  manager_assessment_score?: string;
   date: string;
   program_tags: string[];
   stakeholders: string[];
@@ -40,14 +43,17 @@ export function dbToImpact(db: DbImpact): Impact {
     title: db.title,
     description: db.description,
     jobFamily: db.job_family as JobFamily,
+    level: db.level,
     impactCategory: db.impact_category as ImpactCategory,
     pillars: db.pillars as CraftSkillName[],
     quantifiedValue: db.quantified_value,
     quantifiedUnit: db.quantified_unit,
+    selfAssessmentScore: db.self_assessment_score,
+    managerAssessmentScore: db.manager_assessment_score,
     date: db.date,
-    programTags: db.program_tags,
-    stakeholders: db.stakeholders,
-    evidenceLinks: db.evidence_links,
+    programTags: db.program_tags || [],
+    stakeholders: db.stakeholders || [],
+    evidenceLinks: db.evidence_links || [],
     source: db.source,
     createdAt: db.created_at,
     updatedAt: db.updated_at
@@ -61,10 +67,13 @@ export function impactToDb(impact: any, userId: string): Partial<DbImpact> {
     title: impact.title,
     description: impact.description,
     job_family: impact.jobFamily || 'TPM',
+    level: impact.level || null,
     impact_category: impact.impactCategory,
     pillars: impact.pillars,
     quantified_value: impact.quantifiedValue || null,
     quantified_unit: impact.quantifiedUnit || null,
+    self_assessment_score: impact.selfAssessmentScore || null,
+    manager_assessment_score: impact.managerAssessmentScore || null,
     date: impact.date,
     program_tags: impact.programTags || [],
     stakeholders: impact.stakeholders || [],
