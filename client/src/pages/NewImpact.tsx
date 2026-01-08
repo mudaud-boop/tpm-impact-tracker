@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, Save, ArrowLeft, Plus, X } from 'lucide-react';
 import { createImpact, classifyImpact } from '@/lib/api';
-import { IMPACT_CATEGORIES, JOB_FAMILIES, getCraftSkillsForJobFamily, type JobFamily } from '@/types';
+import { IMPACT_CATEGORIES, JOB_FAMILIES, getCraftSkillsForJobFamily, type JobFamily, type ImpactCategory, type CraftSkillName } from '@/types';
 import { PILLAR_COLORS, CATEGORY_COLORS, JOB_FAMILY_COLORS, cn } from '@/lib/utils';
 
 export function NewImpact() {
@@ -68,6 +68,8 @@ export function NewImpact() {
     try {
       await createImpact({
         ...form,
+        impactCategory: form.impactCategory as ImpactCategory,
+        pillars: form.pillars as CraftSkillName[],
         quantifiedValue: form.quantifiedValue ? parseFloat(form.quantifiedValue) : undefined,
         quantifiedUnit: form.quantifiedUnit || undefined,
         date: form.date

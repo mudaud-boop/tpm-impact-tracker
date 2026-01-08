@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import type { JobFamily, ImpactCategory, CraftSkillName, Impact } from '@/types';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -33,14 +34,14 @@ export interface DbImpact {
 }
 
 // Convert database record to app format
-export function dbToImpact(db: DbImpact) {
+export function dbToImpact(db: DbImpact): Impact {
   return {
     id: db.id,
     title: db.title,
     description: db.description,
-    jobFamily: db.job_family,
-    impactCategory: db.impact_category,
-    pillars: db.pillars,
+    jobFamily: db.job_family as JobFamily,
+    impactCategory: db.impact_category as ImpactCategory,
+    pillars: db.pillars as CraftSkillName[],
     quantifiedValue: db.quantified_value,
     quantifiedUnit: db.quantified_unit,
     date: db.date,

@@ -31,8 +31,8 @@ export async function getImpacts(filters?: {
 
   // Filter by pillar in JS since it's an array
   if (filters?.pillar) {
-    impacts = impacts.filter((impact: Impact) =>
-      impact.pillars.includes(filters.pillar!)
+    impacts = impacts.filter((impact) =>
+      impact.pillars.includes(filters.pillar as any)
     );
   }
 
