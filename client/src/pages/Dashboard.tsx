@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, TrendingUp, Target, Calendar, Briefcase } from 'lucide-react';
+import { Plus, TrendingUp, Target, Calendar, Briefcase, Github } from 'lucide-react';
 import { getImpacts, getStats } from '@/lib/api';
 import { ImpactCard } from '@/components/ImpactCard';
 import { PillarChart } from '@/components/PillarChart';
@@ -217,6 +217,19 @@ export function Dashboard() {
             ))}
           </div>
         )}
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-gray-200 pt-6 mt-8">
+        <a
+          href="https://github.com/mudaud-boop/tpm-impact-tracker"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+        >
+          <Github className="h-4 w-4" />
+          View on GitHub
+        </a>
       </div>
     </div>
   );
