@@ -1,5 +1,5 @@
 import { supabase, dbToImpact, impactToDb } from './supabase';
-import type { Impact, Stats, ClassificationResult, SummaryResponse } from '@/types';
+import type { Impact, Stats, ClassificationResult, SummaryResponse, BetterworksFeedback, Spotlight } from '@/types';
 
 // Impact CRUD
 export async function getImpacts(filters?: {
@@ -244,4 +244,128 @@ export async function getSummary(startDate: string, endDate: string): Promise<Su
     byPillar,
     quantifiedTotals
   };
+}
+
+// Betterworks Feedback CRUD
+export async function getFeedback(): Promise<BetterworksFeedback[]> {
+  const { data, error } = await supabase
+    .from('betterworks_feedback')
+    .select('*')
+    .order('date', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data || []).map(row => ({
+    id: row.id,
+    fromName: row.from_name,
+    fromRole: row.from_role,
+    fromOrg: row.from_org,
+    feedback: row.feedback,
+    link: row.link || undefined,
+    date: row.date,
+    createdAt: row.created_at
+  }));
+}
+
+export async function createFeedback(feedback: Omit<BetterworksFeedback, 'id' | 'createdAt'>): Promise<BetterworksFeedback> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('betterworks_feedback')
+    .insert({
+      user_id: user.id,
+      from_name: feedback.fromName,
+      from_role: feedback.fromRole,
+      from_org: feedback.fromOrg,
+      feedback: feedback.feedback,
+      link: feedback.link || null,
+      date: feedback.date
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return {
+    id: data.id,
+    fromName: data.from_name,
+    fromRole: data.from_role,
+    fromOrg: data.from_org,
+    feedback: data.feedback,
+    link: data.link || undefined,
+    date: data.date,
+    createdAt: data.created_at
+  };
+}
+
+export async function deleteFeedback(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('betterworks_feedback')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
+}
+
+// Spotlights CRUD
+export async function getSpotlights(): Promise<Spotlight[]> {
+  const { data, error } = await supabase
+    .from('spotlights')
+    .select('*')
+    .order('date', { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  return (data || []).map(row => ({
+    id: row.id,
+    fromName: row.from_name,
+    fromRole: row.from_role,
+    fromOrg: row.from_org,
+    feedback: row.feedback,
+    link: row.link || undefined,
+    date: row.date,
+    createdAt: row.created_at
+  }));
+}
+
+export async function createSpotlight(spotlight: Omit<Spotlight, 'id' | 'createdAt'>): Promise<Spotlight> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data, error } = await supabase
+    .from('spotlights')
+    .insert({
+      user_id: user.id,
+      from_name: spotlight.fromName,
+      from_role: spotlight.fromRole,
+      from_org: spotlight.fromOrg,
+      feedback: spotlight.feedback,
+      link: spotlight.link || null,
+      date: spotlight.date
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  return {
+    id: data.id,
+    fromName: data.from_name,
+    fromRole: data.from_role,
+    fromOrg: data.from_org,
+    feedback: data.feedback,
+    link: data.link || undefined,
+    date: data.date,
+    createdAt: data.created_at
+  };
+}
+
+export async function deleteSpotlight(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('spotlights')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw new Error(error.message);
 }

@@ -114,3 +114,91 @@ CREATE POLICY "Public avatar access"
   ON storage.objects
   FOR SELECT
   USING (bucket_id = 'avatars');
+
+-- =============================================
+-- BETTERWORKS FEEDBACK TABLE
+-- =============================================
+CREATE TABLE IF NOT EXISTS betterworks_feedback (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  from_name TEXT NOT NULL,
+  from_role TEXT NOT NULL,
+  from_org TEXT NOT NULL,
+  feedback TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create an index on user_id for faster queries
+CREATE INDEX IF NOT EXISTS betterworks_feedback_user_id_idx ON betterworks_feedback(user_id);
+
+-- Enable Row Level Security
+ALTER TABLE betterworks_feedback ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only see their own feedback
+CREATE POLICY "Users can view own feedback"
+  ON betterworks_feedback
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Policy: Users can insert their own feedback
+CREATE POLICY "Users can insert own feedback"
+  ON betterworks_feedback
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Policy: Users can update their own feedback
+CREATE POLICY "Users can update own feedback"
+  ON betterworks_feedback
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Policy: Users can delete their own feedback
+CREATE POLICY "Users can delete own feedback"
+  ON betterworks_feedback
+  FOR DELETE
+  USING (auth.uid() = user_id);
+
+-- =============================================
+-- SPOTLIGHTS TABLE
+-- =============================================
+CREATE TABLE IF NOT EXISTS spotlights (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  from_name TEXT NOT NULL,
+  from_role TEXT NOT NULL,
+  from_org TEXT NOT NULL,
+  feedback TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Create an index on user_id for faster queries
+CREATE INDEX IF NOT EXISTS spotlights_user_id_idx ON spotlights(user_id);
+
+-- Enable Row Level Security
+ALTER TABLE spotlights ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only see their own spotlights
+CREATE POLICY "Users can view own spotlights"
+  ON spotlights
+  FOR SELECT
+  USING (auth.uid() = user_id);
+
+-- Policy: Users can insert their own spotlights
+CREATE POLICY "Users can insert own spotlights"
+  ON spotlights
+  FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+-- Policy: Users can update their own spotlights
+CREATE POLICY "Users can update own spotlights"
+  ON spotlights
+  FOR UPDATE
+  USING (auth.uid() = user_id)
+  WITH CHECK (auth.uid() = user_id);
+
+-- Policy: Users can delete their own spotlights
+CREATE POLICY "Users can delete own spotlights"
+  ON spotlights
+  FOR DELETE
+  USING (auth.uid() = user_id);

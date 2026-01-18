@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Plus, FileText, Briefcase, LogOut, ChevronDown, Camera, ClipboardCheck, X } from 'lucide-react';
+import { LayoutDashboard, Plus, FileText, Briefcase, LogOut, ChevronDown, Camera, ClipboardCheck, X, MessageSquare, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { IntuitLogo } from './IntuitLogo';
 import { useAuth } from '@/contexts/AuthContext';
@@ -148,7 +148,7 @@ export function Layout({ children }: LayoutProps) {
                   onClick={() => setFeaturesDropdownOpen(!featuresDropdownOpen)}
                   className={cn(
                     'flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors',
-                    featuresDropdownOpen || ['/summary', '/framework'].includes(location.pathname)
+                    featuresDropdownOpen || ['/summary', '/framework', '/betterworks-feedback', '/spotlights'].includes(location.pathname)
                       ? 'bg-primary-50 text-primary-600'
                       : 'text-gray-600 hover:bg-gray-100'
                   )}
@@ -197,6 +197,32 @@ export function Layout({ children }: LayoutProps) {
                     >
                       <Briefcase className="h-4 w-4" />
                       Rubric
+                    </Link>
+                    <Link
+                      to="/betterworks-feedback"
+                      onClick={() => setFeaturesDropdownOpen(false)}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                        location.pathname === '/betterworks-feedback'
+                          ? 'bg-primary-50 text-primary-600'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      )}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      Betterworks Feedback
+                    </Link>
+                    <Link
+                      to="/spotlights"
+                      onClick={() => setFeaturesDropdownOpen(false)}
+                      className={cn(
+                        'flex items-center gap-2 px-4 py-2 text-sm transition-colors',
+                        location.pathname === '/spotlights'
+                          ? 'bg-primary-50 text-primary-600'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      )}
+                    >
+                      <Star className="h-4 w-4" />
+                      Spotlights
                     </Link>
                   </div>
                 )}

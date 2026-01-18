@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { FileText, Copy, Check, Calendar, Target, TrendingUp, Download } from 'lucide-react';
-import { jsPDF } from 'jspdf';
+import { jsPDF, AcroFormTextField } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { getSummary, getImpacts } from '@/lib/api';
+import { getSummary, getImpacts, getFeedback, getSpotlights } from '@/lib/api';
 import { cn, PILLAR_COLORS } from '@/lib/utils';
-import type { SummaryResponse, Impact } from '@/types';
+import type { SummaryResponse, Impact, BetterworksFeedback, Spotlight } from '@/types';
 
 type PresetKey = 'q1' | 'q2' | 'q3' | 'q4' | 'h1' | 'h2' | 'fy' | 'custom';
 
@@ -183,6 +183,8 @@ export function Summary() {
       // Fetch full impact data for the period
       const impacts = await getImpacts({ startDate: range.start, endDate: range.end });
       const data = await getSummary(range.start, range.end);
+      const feedbackData = await getFeedback();
+      const spotlightsData = await getSpotlights();
 
       // Create PDF in landscape for more table width
       const doc = new jsPDF({ orientation: 'landscape' });
@@ -273,13 +275,16 @@ export function Summary() {
           doc.text(`${pillar}`, margin, y);
           y += 6;
 
-          // Table data
+          // Table data - leave Manager Assessment empty for fillable fields
           const tableData = pillarImpacts.map((impact: Impact) => [
             impact.title,
             getScoreLabel(impact.selfAssessmentScore),
-            getScoreLabel(impact.managerAssessmentScore),
+            '', // Empty for fillable field
             impact.description
           ]);
+
+          // Track cell positions for fillable fields
+          const managerCells: { x: number; y: number; width: number; height: number; page: number }[] = [];
 
           // Create table
           autoTable(doc, {
@@ -307,19 +312,147 @@ export function Summary() {
             columnStyles: {
               0: { cellWidth: 70 },
               1: { cellWidth: 35, halign: 'center' },
-              2: { cellWidth: 35, halign: 'center' },
+              2: { cellWidth: 35, halign: 'center', fillColor: [255, 255, 240] },
               3: { cellWidth: 'auto' }
             },
             margin: { left: margin, right: margin },
-            didDrawPage: () => {
-              // Reset y position after page break
+            didDrawCell: (data) => {
+              // Track Manager Assessment cells (column index 2, body rows only)
+              if (data.section === 'body' && data.column.index === 2) {
+                managerCells.push({
+                  x: data.cell.x + 2,
+                  y: data.cell.y + 2,
+                  width: data.cell.width - 4,
+                  height: data.cell.height - 4,
+                  page: doc.getCurrentPageInfo().pageNumber
+                });
+              }
             }
+          });
+
+          // Add fillable text fields for Manager Assessment
+          managerCells.forEach((cell, index) => {
+            doc.setPage(cell.page);
+            const textField = new AcroFormTextField();
+            textField.fieldName = `manager_assessment_${pillar.replace(/\s+/g, '_')}_${index}`;
+            textField.x = cell.x;
+            textField.y = cell.y;
+            textField.width = cell.width;
+            textField.height = cell.height;
+            textField.fontSize = 8;
+            textField.textAlign = 'center';
+            textField.maxFontSize = 8;
+            doc.addField(textField);
           });
 
           // Update y position after table
           y = (doc as any).lastAutoTable.finalY + 10;
         }
       });
+
+      // Betterworks Feedback Section
+      if (feedbackData.length > 0) {
+        // Check if we need a new page
+        if (y > 150) {
+          doc.addPage();
+          y = margin;
+        }
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text('BETTERWORKS FEEDBACK', margin, y);
+        y += 8;
+
+        const feedbackTableData = feedbackData.map((fb: BetterworksFeedback) => [
+          fb.fromName,
+          fb.fromRole,
+          fb.fromOrg,
+          new Date(fb.date).toLocaleDateString(),
+          fb.feedback
+        ]);
+
+        autoTable(doc, {
+          startY: y,
+          head: [['From', 'Role', 'Organization', 'Date', 'Feedback']],
+          body: feedbackTableData,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [245, 247, 250],
+            textColor: [50, 50, 50],
+            fontStyle: 'bold',
+            fontSize: 8,
+            cellPadding: 3
+          },
+          bodyStyles: {
+            fontSize: 8,
+            cellPadding: 3,
+            textColor: [30, 30, 30]
+          },
+          columnStyles: {
+            0: { cellWidth: 35 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 40 },
+            3: { cellWidth: 25 },
+            4: { cellWidth: 'auto' }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
+
+      // Spotlights Section
+      if (spotlightsData.length > 0) {
+        // Check if we need a new page
+        if (y > 150) {
+          doc.addPage();
+          y = margin;
+        }
+
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text('SPOTLIGHTS', margin, y);
+        y += 8;
+
+        const spotlightsTableData = spotlightsData.map((spot: Spotlight) => [
+          spot.fromName,
+          spot.fromRole,
+          spot.fromOrg,
+          new Date(spot.date).toLocaleDateString(),
+          spot.feedback
+        ]);
+
+        autoTable(doc, {
+          startY: y,
+          head: [['From', 'Role', 'Organization', 'Date', 'Spotlight']],
+          body: spotlightsTableData,
+          theme: 'grid',
+          headStyles: {
+            fillColor: [255, 251, 235],
+            textColor: [50, 50, 50],
+            fontStyle: 'bold',
+            fontSize: 8,
+            cellPadding: 3
+          },
+          bodyStyles: {
+            fontSize: 8,
+            cellPadding: 3,
+            textColor: [30, 30, 30]
+          },
+          columnStyles: {
+            0: { cellWidth: 35 },
+            1: { cellWidth: 35 },
+            2: { cellWidth: 40 },
+            3: { cellWidth: 25 },
+            4: { cellWidth: 'auto' }
+          },
+          margin: { left: margin, right: margin }
+        });
+
+        y = (doc as any).lastAutoTable.finalY + 10;
+      }
 
       // Footer on last page
       const pageCount = doc.getNumberOfPages();

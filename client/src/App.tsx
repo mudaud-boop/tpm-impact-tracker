@@ -7,6 +7,8 @@ import { NewImpact } from './pages/NewImpact';
 import { EditImpact } from './pages/EditImpact';
 import { Summary } from './pages/Summary';
 import { CareerFramework } from './pages/CareerFramework';
+import { BetterworksFeedback } from './pages/BetterworksFeedback';
+import { Spotlights } from './pages/Spotlights';
 import { Auth } from './pages/Auth';
 import { AccessGate } from './pages/AccessGate';
 
@@ -79,6 +81,26 @@ function AppRoutes() {
           <ProtectedRoute>
             <Layout>
               <CareerFramework />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/betterworks-feedback"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <BetterworksFeedback />
+            </Layout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/spotlights"
+        element={
+          <ProtectedRoute>
+            <Layout>
+              <Spotlights />
             </Layout>
           </ProtectedRoute>
         }

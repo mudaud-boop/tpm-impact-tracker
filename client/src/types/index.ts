@@ -124,3 +124,25 @@ export interface SummaryResponse {
   byPillar: Record<string, { title: string; quantifiedValue: number | null; quantifiedUnit: string | null }[]>;
   quantifiedTotals: Record<string, number>;
 }
+
+export interface BetterworksFeedback {
+  id: string;
+  fromName: string;
+  fromRole: string;
+  fromOrg: string;
+  feedback: string;
+  link?: string;
+  date: string;
+  createdAt: string;
+}
+
+export interface Spotlight {
+  id: string;
+  fromName: string;
+  fromRole: string;
+  fromOrg: string;
+  feedback: string;
+  link?: string;
+  date: string;
+  createdAt: string;
+}
